@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar Assistant Bot</title>
+    <!-- นำเข้า Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- นำเข้า Google Fonts (Sarabun) -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- นำเข้า Icons จาก FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+        }
+        /* Custom Scrollbar */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .message-anim {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Main Chat Container -->
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden h-[85vh] flex flex-col relative border border-gray-200">
+        
+        <!-- Header -->
+        <div class="bg-blue-600 p-4 flex items-center justify-between shadow-md z-10">
+            <div class="flex items-center gap-3">
+                <div class="bg-white/20 p-2 rounded-full">
+                    <i class="fa-regular fa-calendar-check text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-white font-bold text-lg leading-tight">Calendar Assistant</h1>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                        <span class="text-blue-100 text-xs">Online</span>
+                    </div>
+                </div>
+            </div>
+            <button onclick="resetChat()" class="text-white/80 hover:text-white transition-colors" title="เริ่มใหม่">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+            <!-- Messages will be injected here by JS -->
+        </div>
+
+        <!-- Quick Actions (Chips) -->
+        <div id="quick-actions" class="px-4 pb-2 bg-slate-50 flex gap-2 overflow-x-auto scrollbar-hide">
+            <!-- Chips will be injected here -->
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 bg-white border-t border-gray-100">
+            <form id="chat-form" class="flex items-center gap-2" onsubmit="handleFormSubmit(event)">
+                <input 
+                    type="text" 
+                    id="user-input" 
+                    class="flex-1 bg-gray-100 border-0 rounded-full px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700 placeholder-gray-400"
+                    placeholder="พิมพ์ข้อความ..."
+                    autocomplete="off"
+                >
+                <button 
+                    type="submit" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white rounded-full w-12 h-12 flex items-center justify-center transition-transform active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    id="send-btn"
+                >
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </form>
+            <div class="text-center mt-2">
+                <p class="text-[10px] text-gray-400">Powered by Simple JS Logic</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script Logic -->
+    <script>
+        // --- Configuration & State ---
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const quickActions = document.getElementById('quick-actions');
+
+        // สถานะของการสนทนา (State Machine อย่างง่าย)
+        let currentState = 'IDLE'; // IDLE, BOOKING_DATE, BOOKING_TIME, BOOKING_TOPIC
+        let bookingData = { date: '', time: '', topic: '' };
+
+        // ฐานข้อมูล Mockup การนัดหมาย
+        let appointments = [
+            { date: 'พรุ่งนี้', time: '10:00', topic: 'ประชุมทีม Marketing' },
+            { date: 'วันศุกร์', time: '14:00', topic: 'พบลูกค้า VIP' }
+        ];
+
+        // --- Core Functions ---
+
+        // เริ่มต้น Chat
+        function initChat() {
+            addBotMessage("สวัสดีครับ! 👋 ผมคือผู้ช่วยจัดการตารางนัดหมาย\nคุณต้องการให้ผมช่วยเรื่องอะไรครับ?");
+            showQuickReplies(['สร้างนัดหมายใหม่', 'ดูตารางนัด', 'วิธีใช้งาน']);
+        }
+
+        // เพิ่มข้อความฝั่ง Bot
+        function addBotMessage(text, delay = 600) {
+            showTypingIndicator();
+            setTimeout(() => {
+                removeTypingIndicator();
+                const div = document.createElement('div');
+                div.className = 'flex justify-start w-full message-anim';
+                div.innerHTML = `
+                    <div class="flex items-end max-w-[85%]">
+                        <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0 text-blue-600">
+                            <i class="fa-solid fa-robot text-xs"></i>
+                        </div>
+                        <div class="bg-white p-3 rounded-2xl rounded-bl-none shadow-sm border border-gray-100 text-gray-700 text-sm leading-relaxed whitespace-pre-line">
+                            ${text}
+                        </div>
+                    </div>
+                `;
+                chatContainer.appendChild(div);
+                scrollToBottom();
+            }, delay);
+        }
+
+        // เพิ่มข้อความฝั่ง User
+        function addUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'flex justify-end w-full message-anim';
+            div.innerHTML = `
+                <div class="flex items-end max-w-[85%]">
+                    <div class="bg-blue-600 p-3 rounded-2xl rounded-br-none shadow-md text-white text-sm leading-relaxed">
+                        ${text}
+                    </div>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        // ตัวแสดงสถานะกำลังพิมพ์ (...)
+        function showTypingIndicator() {
+            const id = 'typing-indicator';
+            if (document.getElementById(id)) return;
+            
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'flex justify-start w-full message-anim mb-2';
+            div.innerHTML = `
+                <div class="flex items-end">
+                    <div class="w-8 h-8 mr-2"></div>
+                    <div class="bg-white px-4 py-3 rounded-2xl rounded-bl-none shadow-sm border border-gray-100 flex gap-1">
+                        <div class="w-2 h-2 bg-gray-400 rounded-full typing-dot"></div>
+                        <div class="w-2 h-2 bg-gray-400 rounded-full typing-dot"></div>
+                        <div class="w-2 h-2 bg-gray-400 rounded-full typing-dot"></div>
+                    </div>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        function removeTypingIndicator() {
+            const el = document.getElementById('typing-indicator');
+            if (el) el.remove();
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // แสดงปุ่มทางเลือก (Quick Replies)
+        function showQuickReplies(options) {
+            quickActions.innerHTML = '';
+            setTimeout(() => {
+                options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = 'px-4 py-2 bg-white border border-blue-100 rounded-full text-blue-600 text-sm hover:bg-blue-50 hover:border-blue-300 transition-all whitespace-nowrap shadow-sm mb-2';
+                    btn.innerText = opt;
+                    btn.onclick = () => processInput(opt);
+                    quickActions.appendChild(btn);
+                });
+                // Scroll chips to start
+                quickActions.scrollLeft = 0;
+            }, 700); // Show after bot starts typing/talking
+        }
+
+        // --- Logic Processing (AI Brain) ---
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const text = userInput.value.trim();
+            if (!text) return;
+            processInput(text);
+            userInput.value = '';
+        }
+
+        function processInput(text) {
+            // 1. Show user message
+            addUserMessage(text);
+            quickActions.innerHTML = ''; // Clear suggestions
+
+            // 2. Process based on State or Keywords
+            
+            // --- STATE: BOOKING FLOW ---
+            if (currentState === 'BOOKING_DATE') {
+                bookingData.date = text;
+                currentState = 'BOOKING_TIME';
+                addBotMessage(`รับทราบครับ วันที่ "${text}" นะครับ\n⏰ สะดวกเป็นเวลากี่โมงครับ? (เช่น 10:00, บ่ายโมง)`);
+                return;
+            }
+            if (currentState === 'BO
